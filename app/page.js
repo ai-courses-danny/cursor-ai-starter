@@ -7,10 +7,102 @@ import {
   ContactShadows,
   OrbitControls,
 } from '@react-three/drei';
-import React, { Suspense, useRef } from 'react';
+import React, { Suspense, useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import IframeComponent from './IframeComponent';
+
 export default function Home() {
+  const [currentVideoId, setCurrentVideoId] = useState('9bZkp7q19f0');
+  const [videoList, setVideoList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [newVideo, setNewVideo] = useState({ id: '', title: '' });
+  const [showForm, setShowForm] = useState(false);
+
+  // API로부터 비디오 목록 불러오기
+  useEffect(() => {
+    const fetchVideos = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/videos');
+        const result = await response.json();
+
+        if (result.success) {
+          setVideoList(result.data);
+        } else {
+          setError(result.error || '비디오 목록을 불러오는데 실패했습니다.');
+        }
+      } catch (err) {
+        setError('서버와의 통신에 문제가 발생했습니다.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVideos();
+  }, []);
+
+  // 새 비디오 추가
+  const handleAddVideo = async (e) => {
+    e.preventDefault();
+
+    if (!newVideo.id || !newVideo.title) {
+      alert('ID와 제목을 모두 입력해주세요.');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/videos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newVideo),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setVideoList([...videoList, result.data]);
+        setNewVideo({ id: '', title: '' });
+        setShowForm(false);
+      } else {
+        alert(result.error || '추가 실패');
+      }
+    } catch (err) {
+      alert('서버 오류가 발생했습니다.');
+      console.error(err);
+    }
+  };
+
+  // 비디오 삭제
+  const handleDeleteVideo = async (id) => {
+    if (!confirm('정말 삭제하시겠습니까?')) return;
+
+    try {
+      const response = await fetch(`/api/videos/${id}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setVideoList(videoList.filter((video) => video.id !== id));
+        // 현재 재생 중인 비디오가 삭제되면 첫 번째 비디오로 설정
+        if (currentVideoId === id && videoList.length > 1) {
+          const nextVideo = videoList.find((video) => video.id !== id);
+          if (nextVideo) setCurrentVideoId(nextVideo.id);
+        }
+      } else {
+        alert(result.error || '삭제 실패');
+      }
+    } catch (err) {
+      alert('서버 오류가 발생했습니다.');
+      console.error(err);
+    }
+  };
+
   function Model(props) {
     const group = useRef();
     // Load model
@@ -65,7 +157,7 @@ export default function Home() {
                   className="wrapper"
                   onPointerDown={(e) => e.stopPropagation()}
                 >
-                  <IframeComponent />
+                  <IframeComponent videoId={currentVideoId} />
                 </div>
               </Html>
             </mesh>
@@ -94,11 +186,120 @@ export default function Home() {
       </group>
     );
   }
+
   return (
     <div className="w-full h-full relative">
-      <div className="absolute top-5 left-5 z-10 text-2xl font-bold text-white ">
-        월드버텍 AI 강의 실습
+      <div className="absolute top-5 left-5 z-10 text-2xl font-bold text-white">
+        월드버텍 AI 강의 실습 - 🧠 AI YouTube Link Manager
       </div>
+
+      <div className="absolute top-5 right-5 z-10 bg-black/70 rounded-lg p-4 backdrop-blur-sm max-h-[80vh] overflow-auto">
+        <h2 className="text-white font-bold mb-2 text-center">
+          유튜브 영상 목록
+        </h2>
+
+        {loading ? (
+          <p className="text-white text-center py-2">로딩 중...</p>
+        ) : error ? (
+          <p className="text-red-500 text-center py-2">{error}</p>
+        ) : (
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-white/80 border-b border-white/20">
+                  <th className="py-2 text-left">제목</th>
+                  <th className="py-2 w-10 text-center">삭제</th>
+                </tr>
+              </thead>
+              <tbody>
+                {videoList.map((video) => (
+                  <tr
+                    key={video.id}
+                    className={`border-b border-white/10 hover:bg-white/10 cursor-pointer ${
+                      currentVideoId === video.id ? 'bg-white/20' : ''
+                    }`}
+                  >
+                    <td
+                      className="py-2 text-white"
+                      onClick={() => setCurrentVideoId(video.id)}
+                    >
+                      {video.title}
+                    </td>
+                    <td
+                      className="py-2 text-center"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteVideo(video.id);
+                      }}
+                    >
+                      <button className="text-red-400 hover:text-red-300">
+                        ×
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {showForm ? (
+              <form
+                onSubmit={handleAddVideo}
+                className="mt-4 border-t border-white/20 pt-2"
+              >
+                <div className="mb-2">
+                  <label className="block text-white text-xs mb-1">
+                    유튜브 비디오 ID
+                  </label>
+                  <input
+                    type="text"
+                    value={newVideo.id}
+                    onChange={(e) =>
+                      setNewVideo({ ...newVideo, id: e.target.value })
+                    }
+                    className="w-full bg-black/50 text-white border border-white/30 rounded px-2 py-1 text-xs"
+                    placeholder="dQw4w9WgXcQ"
+                  />
+                </div>
+                <div className="mb-2">
+                  <label className="block text-white text-xs mb-1">제목</label>
+                  <input
+                    type="text"
+                    value={newVideo.title}
+                    onChange={(e) =>
+                      setNewVideo({ ...newVideo, title: e.target.value })
+                    }
+                    className="w-full bg-black/50 text-white border border-white/30 rounded px-2 py-1 text-xs"
+                    placeholder="비디오 제목"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded"
+                  >
+                    추가
+                  </button>
+                  <button
+                    type="button"
+                    className="bg-gray-600 hover:bg-gray-700 text-white text-xs px-3 py-1 rounded"
+                    onClick={() => setShowForm(false)}
+                  >
+                    취소
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                onClick={() => setShowForm(true)}
+                className="mt-3 w-full bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1 rounded"
+              >
+                새 비디오 추가
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
       <Canvas camera={{ position: [-5, 0, -15], fov: 55 }}>
         <pointLight position={[10, 10, 10]} intensity={1.5} />
         <Suspense fallback={null}>
