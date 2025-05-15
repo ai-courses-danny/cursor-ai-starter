@@ -97,7 +97,7 @@ export default function Home() {
   return (
     <div className="w-full h-full relative">
       <div className="absolute top-5 left-5 z-10 text-2xl font-bold text-white ">
-        월드버텍 AI 강의 실습
+        월드버텍 AI 강의 실습 - 🧠 AI Youtube Link Manager
       </div>
       <Canvas camera={{ position: [-5, 0, -15], fov: 55 }}>
         <pointLight position={[10, 10, 10]} intensity={1.5} />
